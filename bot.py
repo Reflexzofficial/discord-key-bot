@@ -135,4 +135,7 @@ async def reset(ctx, member: discord.Member):
     await ctx.message.delete()
 
 import os
+from keep_alive import keep_alive
+
+keep_alive()
 bot.run(os.getenv("DISCORD_TOKEN"))
