@@ -37,7 +37,7 @@ def create_stock_embed():
         description=(
             "กดปุ่มด้านล่างเพื่อรับคีย์ที่คุณต้องการได้เลย!\n\n" + 
             "\n".join(stock_lines) + 
-            "\n\n📌 **หมายเหตุ:** สามารถรับได้ 1 ครั้งต่อ 1 บัญชี Discord เท่านั้น"
+            "\n\n📌 **หมายเหตุ:** สามารถเลือกรับได้เพียง 1 คีย์ต่อ 1 บัญชี Discord เท่านั้น (รับแล้วไม่สามารถรับหมวดอื่นได้อีก)"
         ),
         color=discord.Color.from_rgb(135, 206, 250)
     )
@@ -65,14 +65,19 @@ class DynamicKeyButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         user_id = str(interaction.user.id)
         data = load_data()
-        user_claim_key = f"{user_id}_{self.category_name}"
 
-        if user_claim_key in data["claimed_users"]:
-            old_key = data["claimed_users"][user_claim_key]
-            await interaction.response.send_message(
-                f"❌ คุณรับสิทธิ์ **{self.category_name}** ไปแล้ว คีย์ของคุณคือ: ||`{old_key}`||",
-                ephemeral=True
-            )
+        # เช็กจาก user_id อย่างเดียว (รับอันไหนไปแล้ว จะกดรับอันอื่นไม่ได้อีก)
+        if user_id in data["claimed_users"]:
+            record = data["claimed_users"][user_id]
+            # รองรับทั้งรูปแบบข้อมูลใหม่ (dict) และเก่า (str)
+            if isinstance(record, dict):
+                claimed_cat = record.get("category", "ไม่ระบุ")
+                old_key = record.get("key", "")
+                msg = f"❌ คุณใช้สิทธิ์รับคีย์ **{claimed_cat}** ไปแล้ว (1 บัญชีรับได้เพียง 1 อย่างเท่านั้น)\nคีย์ของคุณคือ: ||`{old_key}`||"
+            else:
+                msg = f"❌ คุณใช้สิทธิ์รับคีย์ไปแล้ว (1 บัญชีรับได้เพียง 1 อย่างเท่านั้น)\nคีย์ของคุณคือ: ||`{record}`||"
+
+            await interaction.response.send_message(msg, ephemeral=True)
             return
 
         if self.category_name not in data["categories"] or len(data["categories"][self.category_name]) == 0:
@@ -83,11 +88,15 @@ class DynamicKeyButton(discord.ui.Button):
             return
 
         claimed_key = data["categories"][self.category_name].pop(0)
-        data["claimed_users"][user_claim_key] = claimed_key
+        # บันทึกทั้งชื่อหมวดหมู่และคีย์ลงใน user_id
+        data["claimed_users"][user_id] = {
+            "category": self.category_name,
+            "key": claimed_key
+        }
         save_data(data)
 
         await interaction.response.send_message(
-            f"✅ รับคีย์ **{self.category_name}** สำเร็จ คีย์ของคุณคือ: ||`{claimed_key}`||",
+            f"✅ รับคีย์ **{self.category_name}** สำเร็จ! คีย์ของคุณคือ: ||`{claimed_key}`||",
             ephemeral=True
         )
 
@@ -145,7 +154,6 @@ async def addkey(ctx, category: str, *new_keys):
     msg = f"✅ สร้างสินค้าใหม่ **{category}** และเพิ่ม `{len(new_keys)}` คีย์เรียบร้อย (พิมพ์ `!setup` ใหม่เพื่ออัปเดตปุ่ม)" if is_new else f"✅ เพิ่มคีย์เข้า **{category}** จำนวน `{len(new_keys)}` คีย์เรียบร้อย"
     await ctx.send(msg, delete_after=10)
 
-# คำสั่งใหม่ 1: เช็กดูรายการคีย์ที่เหลืออยู่ (ส่งเข้าแชทส่วนตัว DM เพื่อความปลอดภัย)
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def checkkey(ctx, category: str):
@@ -165,7 +173,6 @@ async def checkkey(ctx, category: str):
     msg = f"📋 **รายการคีย์คงเหลือของ {category}** (ทั้งหมด `{len(keys)}` คีย์):\n{key_list_text}"
 
     try:
-        # แบ่งส่งกรณีมีคีย์เยอะเกิน 2,000 ตัวอักษร
         if len(msg) > 1900:
             await ctx.author.send(f"📋 **รายการคีย์คงเหลือของ {category}** (ทั้งหมด `{len(keys)}` คีย์):")
             chunk = ""
@@ -183,7 +190,6 @@ async def checkkey(ctx, category: str):
     except discord.Forbidden:
         await ctx.send("❌ ไม่สามารถส่ง DM ได้ กรุณาเปิดรับข้อความส่วนตัวจากสมาชิกในเซิร์ฟเวอร์ก่อนครับ", delete_after=8)
 
-# คำสั่งใหม่ 2: ลบคีย์ออกจากสต็อก (ระบุคีย์ หรือพิมพ์ all เพื่อล้างทั้งหมด)
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def delkey(ctx, category: str, *keys_to_remove):
@@ -244,7 +250,7 @@ async def reset(ctx, member: discord.Member):
     
     removed = False
     for k in list(data["claimed_users"].keys()):
-        if k.startswith(user_id):
+        if k == user_id or k.startswith(f"{user_id}_"):
             del data["claimed_users"][k]
             removed = True
 
