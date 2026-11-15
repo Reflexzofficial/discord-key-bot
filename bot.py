@@ -26,14 +26,17 @@ def save_data(data):
 # ปุ่มกดแบบสร้างอัตโนมัติตามชื่อหมวดหมู่
 class DynamicKeyButton(discord.ui.Button):
     def __init__(self, category_name: str, index: int):
-        # สลับสีปุ่มให้อัตโนมัติ (น้ำเงิน, เขียว, เทา, แดง)
-        styles = [
-            discord.ButtonStyle.primary,
-            discord.ButtonStyle.success,
-            discord.ButtonStyle.secondary,
-            discord.ButtonStyle.danger
-        ]
-        style = styles[index % len(styles)]
+        # กำหนดสีเฉพาะเจาะจงตามชื่อสินค้า
+        name = category_name.lower()
+        if "phantom" in name:
+            style = discord.ButtonStyle.secondary  # สีเทา
+        elif "aim" in name or "aimhack" in name:
+            style = discord.ButtonStyle.danger     # สีแดง
+        elif "drip" in name or "dripwire" in name:
+            style = discord.ButtonStyle.primary    # สีม่วง/น้ำเงินเข้ม (ใน Discord ใช้ primary เป็นสีฟ้า/น้ำเงินหลัก)
+        else:
+            style = discord.ButtonStyle.secondary  # ค่าเริ่มต้นเป็นสีเทาสำหรับสินค้าอื่นๆ
+
         super().__init__(
             label=f"🎁 รับคีย์ {category_name}",
             style=style,
