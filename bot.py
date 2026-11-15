@@ -23,10 +23,30 @@ def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
+# ฟังก์ชันสร้าง Embed และสต็อกล่าสุด
+def create_stock_embed():
+    data = load_data()
+    stock_lines = []
+    if not data["categories"]:
+        stock_lines.append("⚠️ ยังไม่มีสินค้าในระบบ")
+    else:
+        for cat_name, keys in data["categories"].items():
+            stock_lines.append(f"📦 สต็อก **{cat_name}** เหลือ: `{len(keys)}` คีย์")
+
+    embed = discord.Embed(
+        title="🌟 REFLEXZOFFICIAL แจกคีย์ฟรี",
+        description=(
+            "กดปุ่มด้านล่างเพื่อรับคีย์ที่คุณต้องการได้เลย!\n\n" + 
+            "\n".join(stock_lines) + 
+            "\n\n📌 **หมายเหตุ:** สามารถรับได้ 1 ครั้งต่อ 1 บัญชี Discord เท่านั้น"
+        ),
+        color=discord.Color.from_rgb(135, 206, 250)
+    )
+    return embed
+
 class DynamicKeyButton(discord.ui.Button):
     def __init__(self, category_name: str, index: int):
         name = category_name.lower()
-        # กำหนดสีปุ่มตามที่คุณต้องการ
         if "phantom" in name:
             style = discord.ButtonStyle.secondary  # สีเทา
         elif "aim" in name or "aimhack" in name:
@@ -34,7 +54,7 @@ class DynamicKeyButton(discord.ui.Button):
         elif "drip" in name or "dripwire" in name:
             style = discord.ButtonStyle.primary    # สีม่วง/น้ำเงิน
         else:
-            style = discord.ButtonStyle.secondary  # ค่าเริ่มต้นสำหรับสินค้าอื่น
+            style = discord.ButtonStyle.secondary
 
         super().__init__(
             label=f"🎁 รับคีย์ {category_name}",
@@ -67,10 +87,19 @@ class DynamicKeyButton(discord.ui.Button):
         data["claimed_users"][user_claim_key] = claimed_key
         save_data(data)
 
+        # ส่งคีย์ให้ผู้ใช้แบบส่วนตัว (ephemeral)
         await interaction.response.send_message(
             f"✅ รับคีย์ **{self.category_name}** สำเร็จ คีย์ของคุณคือ: ||`{claimed_key}`||",
             ephemeral=True
         )
+
+        # อัปเดตตัวเลขสต็อกบนหน้าข้อความหลักอัตโนมัติทันที
+        try:
+            new_embed = create_stock_embed()
+            new_view = DynamicKeyView()
+            await interaction.message.edit(embed=new_embed, view=new_view)
+        except Exception as e:
+            print(f"Error updating message: {e}")
 
 class DynamicKeyView(discord.ui.View):
     def __init__(self):
@@ -93,19 +122,7 @@ async def setup(ctx):
         await ctx.send("⚠️ ยังไม่มีสินค้าในระบบ กรุณาเพิ่มสินค้าด้วยคำสั่ง `!addkey \"ชื่อสินค้า\" คีย์1 คีย์2` ก่อนครับ", delete_after=10)
         return
 
-    stock_lines = []
-    for cat_name, keys in data["categories"].items():
-        stock_lines.append(f"📦 สต็อก **{cat_name}** เหลือ: `{len(keys)}` คีย์")
-
-    embed = discord.Embed(
-        title="🌟 REFLEXZOFFICIAL แจกคีย์ฟรี",
-        description=(
-            "กดปุ่มด้านล่างเพื่อรับคีย์ที่คุณต้องการได้เลย!\n\n" + 
-            "\n".join(stock_lines) + 
-            "\n\n📌 **หมายเหตุ:** สามารถรับได้ 1 ครั้งต่อ 1 บัญชี Discord เท่านั้น"
-        ),
-        color=discord.Color.from_rgb(135, 206, 250)
-    )
+    embed = create_stock_embed()
     await ctx.send(embed=embed, view=DynamicKeyView())
     await ctx.message.delete()
 
