@@ -23,19 +23,18 @@ def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
-# ปุ่มกดแบบสร้างอัตโนมัติตามชื่อหมวดหมู่
 class DynamicKeyButton(discord.ui.Button):
     def __init__(self, category_name: str, index: int):
-        # กำหนดสีเฉพาะเจาะจงตามชื่อสินค้า
         name = category_name.lower()
+        # กำหนดสีปุ่มตามที่คุณต้องการ
         if "phantom" in name:
             style = discord.ButtonStyle.secondary  # สีเทา
         elif "aim" in name or "aimhack" in name:
             style = discord.ButtonStyle.danger     # สีแดง
         elif "drip" in name or "dripwire" in name:
-            style = discord.ButtonStyle.primary    # สีม่วง/น้ำเงินเข้ม (ใน Discord ใช้ primary เป็นสีฟ้า/น้ำเงินหลัก)
+            style = discord.ButtonStyle.primary    # สีม่วง/น้ำเงิน
         else:
-            style = discord.ButtonStyle.secondary  # ค่าเริ่มต้นเป็นสีเทาสำหรับสินค้าอื่นๆ
+            style = discord.ButtonStyle.secondary  # ค่าเริ่มต้นสำหรับสินค้าอื่น
 
         super().__init__(
             label=f"🎁 รับคีย์ {category_name}",
@@ -78,7 +77,7 @@ class DynamicKeyView(discord.ui.View):
         super().__init__(timeout=None)
         data = load_data()
         for idx, cat_name in enumerate(data["categories"].keys()):
-            if idx < 25: # Discord จำกัดสูงสุด 25 ปุ่มต่อข้อความ
+            if idx < 25:
                 self.add_item(DynamicKeyButton(cat_name, idx))
 
 @bot.event
@@ -100,7 +99,11 @@ async def setup(ctx):
 
     embed = discord.Embed(
         title="🌟 REFLEXZOFFICIAL แจกคีย์ฟรี",
-        description="กดปุ่มด้านล่างเพื่อรับคีย์ที่คุณต้องการได้เลย!\n\n" + "\n".join(stock_lines),
+        description=(
+            "กดปุ่มด้านล่างเพื่อรับคีย์ที่คุณต้องการได้เลย!\n\n" + 
+            "\n".join(stock_lines) + 
+            "\n\n📌 **หมายเหตุ:** สามารถรับได้ 1 ครั้งต่อ 1 บัญชี Discord เท่านั้น"
+        ),
         color=discord.Color.from_rgb(135, 206, 250)
     )
     await ctx.send(embed=embed, view=DynamicKeyView())
@@ -122,7 +125,6 @@ async def addkey(ctx, category: str, *new_keys):
     data["categories"][category].extend(new_keys)
     save_data(data)
     
-    # อัปเดตปุ่มกดให้บอทรู้จักหมวดหมู่ใหม่ทันทีโดยไม่ต้องรีสตาร์ท
     bot.add_view(DynamicKeyView())
 
     await ctx.message.delete()
