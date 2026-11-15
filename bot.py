@@ -23,7 +23,6 @@ def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
-# ฟังก์ชันสร้าง Embed และสต็อกล่าสุด
 def create_stock_embed():
     data = load_data()
     stock_lines = []
@@ -87,13 +86,11 @@ class DynamicKeyButton(discord.ui.Button):
         data["claimed_users"][user_claim_key] = claimed_key
         save_data(data)
 
-        # ส่งคีย์ให้ผู้ใช้แบบส่วนตัว (ephemeral)
         await interaction.response.send_message(
             f"✅ รับคีย์ **{self.category_name}** สำเร็จ คีย์ของคุณคือ: ||`{claimed_key}`||",
             ephemeral=True
         )
 
-        # อัปเดตตัวเลขสต็อกบนหน้าข้อความหลักอัตโนมัติทันที
         try:
             new_embed = create_stock_embed()
             new_view = DynamicKeyView()
@@ -147,6 +144,75 @@ async def addkey(ctx, category: str, *new_keys):
     await ctx.message.delete()
     msg = f"✅ สร้างสินค้าใหม่ **{category}** และเพิ่ม `{len(new_keys)}` คีย์เรียบร้อย (พิมพ์ `!setup` ใหม่เพื่ออัปเดตปุ่ม)" if is_new else f"✅ เพิ่มคีย์เข้า **{category}** จำนวน `{len(new_keys)}` คีย์เรียบร้อย"
     await ctx.send(msg, delete_after=10)
+
+# คำสั่งใหม่ 1: เช็กดูรายการคีย์ที่เหลืออยู่ (ส่งเข้าแชทส่วนตัว DM เพื่อความปลอดภัย)
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def checkkey(ctx, category: str):
+    data = load_data()
+    await ctx.message.delete()
+
+    if category not in data["categories"]:
+        await ctx.send(f"⚠️ ไม่พบชื่อสินค้า **{category}** ในระบบ", delete_after=5)
+        return
+
+    keys = data["categories"][category]
+    if not keys:
+        await ctx.send(f"📦 สินค้า **{category}** ไม่มีคีย์เหลือในสต็อก (`0` คีย์)", delete_after=8)
+        return
+
+    key_list_text = "\n".join([f"{i+1}. `{k}`" for i, k in enumerate(keys)])
+    msg = f"📋 **รายการคีย์คงเหลือของ {category}** (ทั้งหมด `{len(keys)}` คีย์):\n{key_list_text}"
+
+    try:
+        # แบ่งส่งกรณีมีคีย์เยอะเกิน 2,000 ตัวอักษร
+        if len(msg) > 1900:
+            await ctx.author.send(f"📋 **รายการคีย์คงเหลือของ {category}** (ทั้งหมด `{len(keys)}` คีย์):")
+            chunk = ""
+            for line in key_list_text.split("\n"):
+                if len(chunk) + len(line) + 1 > 1900:
+                    await ctx.author.send(chunk)
+                    chunk = line
+                else:
+                    chunk = f"{chunk}\n{line}" if chunk else line
+            if chunk:
+                await ctx.author.send(chunk)
+        else:
+            await ctx.author.send(msg)
+        await ctx.send(f"📩 ส่งรายการคีย์ของ **{category}** ไปในแชทส่วนตัว (DM) เรียบร้อยแล้ว", delete_after=6)
+    except discord.Forbidden:
+        await ctx.send("❌ ไม่สามารถส่ง DM ได้ กรุณาเปิดรับข้อความส่วนตัวจากสมาชิกในเซิร์ฟเวอร์ก่อนครับ", delete_after=8)
+
+# คำสั่งใหม่ 2: ลบคีย์ออกจากสต็อก (ระบุคีย์ หรือพิมพ์ all เพื่อล้างทั้งหมด)
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def delkey(ctx, category: str, *keys_to_remove):
+    data = load_data()
+    await ctx.message.delete()
+
+    if category not in data["categories"]:
+        await ctx.send(f"⚠️ ไม่พบชื่อสินค้า **{category}** ในระบบ", delete_after=5)
+        return
+
+    if not keys_to_remove:
+        await ctx.send("⚠️ กรุณาระบุคีย์ที่ต้องการลบ หรือพิมพ์ `all` เช่น `!delkey Phantom KEY-1` หรือ `!delkey Phantom all`", delete_after=8)
+        return
+
+    if len(keys_to_remove) == 1 and keys_to_remove[0].lower() == "all":
+        count = len(data["categories"][category])
+        data["categories"][category] = []
+        save_data(data)
+        await ctx.send(f"🗑️ ล้างคีย์ทั้งหมดของ **{category}** เรียบร้อยแล้ว (`{count}` คีย์)", delete_after=8)
+        return
+
+    removed_count = 0
+    for k in keys_to_remove:
+        if k in data["categories"][category]:
+            data["categories"][category].remove(k)
+            removed_count += 1
+
+    save_data(data)
+    await ctx.send(f"🗑️ ลบคีย์ออกจาก **{category}** จำนวน `{removed_count}` คีย์เรียบร้อย (เหลือ `{len(data['categories'][category])}` คีย์)", delete_after=8)
 
 @bot.command()
 @commands.has_permissions(administrator=True)
